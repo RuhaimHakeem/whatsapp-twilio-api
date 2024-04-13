@@ -12,30 +12,22 @@ const questions = require("./questions.js");
 let ordersReviewOnProcess = [];
 
 const addOrder = async (req, res) => {
-  const { mobileNo, products, description, price } = req.body;
+  const { product, mobile, description, quantity } = req.body;
 
-  if (!mobileNo || !products || !description || !price) {
+  if (!mobile || !product || !description || !quantity) {
     res.status(400).json({ message: "Please fill all the fields" });
     return;
   }
 
   const orderId = generateFirestoreDocId();
 
-  const to = `whatsapp:+${mobileNo}`;
+  const to = `whatsapp:+${mobile}`;
   sendMessage(client, to, questions[0].question);
 
-  ordersReviewOnProcess.push({ orderId, mobileNo, questionSent: 1 });
+  ordersReviewOnProcess.push({ orderId, mobile, questionSent: 1 });
 
   try {
-    db.collection("orders").doc(orderId).set({
-      orderId,
-      products,
-      description,
-      buyerName: "Ruhaim",
-      price,
-      isReviewed: false,
-      mobileNo,
-    });
+    db.collection("orders").doc(orderId).set(req.body);
 
     res.status(200).json({ message: "Order added successfully" });
   } catch (e) {

@@ -1,12 +1,14 @@
 require("dotenv").config();
 const express = require("express");
 const app = express();
+const cors = require("cors");
 const bodyParser = require("body-parser");
 
 const { addOrder, webhookHandler } = require("./handler.js");
 
 const port = 3000;
 
+app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
