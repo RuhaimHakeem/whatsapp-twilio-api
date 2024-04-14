@@ -5,7 +5,9 @@ const { db } = require("./firebase.js");
 const { generateFirestoreDocId } = require("./utils/generate-doc-id.js");
 const { sendMessage } = require("./utils/send-message.js");
 const { addAnswer } = require("./utils/add-answer.js");
+const { getAnswers } = require("./utils/get-answers.js");
 const questions = require("./questions.js");
+const axios = require("axios");
 
 // Handler for adding orders
 
@@ -45,7 +47,7 @@ const webhookHandler = async (req, res) => {
   const mobileNo = req.body.WaId;
 
   const orderIndex = ordersReviewOnProcess.findIndex(
-    (order) => order.mobileNo == mobileNo
+    (order) => order.mobile == mobileNo
   );
 
   if (orderIndex < 0) {
@@ -62,10 +64,10 @@ const webhookHandler = async (req, res) => {
     return;
   }
 
-  const to = `whatsapp:+${order.mobileNo}`;
+  const to = `whatsapp:+${order.mobile}`;
 
   if (order.questionSent !== 1) {
-    addAnswer(
+    await addAnswer(
       order.orderId,
       req.body.Body,
       questions[order.questionSent - 1].isRangeQuestion
@@ -74,6 +76,27 @@ const webhookHandler = async (req, res) => {
 
   if (order.questionSent === 5) {
     sendMessage(client, to, "Thanks for answering the questions");
+
+    const answer = await getAnswers(order.orderId);
+
+    if (!answer) {
+      return;
+    }
+    try {
+      const response = await axios.post("http://127.0.0.1:5000/predict", {
+        text: answer,
+      });
+
+      db.collection("reviews").add({
+        orderId: order.orderId,
+        sentiment: response.data.sentiment,
+      });
+
+      res.status(200).send({ sentiment: response.data });
+    } catch (error) {
+      console.error("Error sending data:", error);
+      res.status(500).send("Error sending data");
+    }
 
     ordersReviewOnProcess.splice(orderIndex, 1);
     return;
@@ -87,4 +110,53 @@ const webhookHandler = async (req, res) => {
   }
 };
 
-module.exports = { addOrder, webhookHandler };
+const predict = async (req, res) => {
+  const answersRef = db.collection("answers");
+
+  const querySnapshot = await answersRef
+    .where("orderId", "==", "1713072209460cm3nqu5u")
+    .select("answers")
+    .get();
+
+  let answer = "";
+
+  if (!querySnapshot.empty) {
+    querySnapshot.forEach(async (doc) => {
+      try {
+        const text = doc
+          .data()
+          .answers.filter((answer) => answer.isRangeAnswer)
+          .map((answer) => {
+            const text =
+              answer.a == 5
+                ? "Great"
+                : answer.a == 4
+                ? "Good"
+                : answer.a == 3
+                ? "Okay"
+                : answer.a == 2
+                ? "Bad"
+                : answer.a == 1
+                ? "Bad"
+                : undefined;
+
+            return text;
+          });
+
+        answer += `${text} `;
+
+        answer += doc
+          .data()
+          .answers.filter((answer) => !answer.isRangeAnswer)
+          .map((answer) => answer.a)
+          .join(", ");
+
+        console.log(answer);
+      } catch (error) {
+        console.error("Error updating document:", error);
+      }
+    });
+  }
+};
+
+module.exports = { addOrder, webhookHandler, predict };
