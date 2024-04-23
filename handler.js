@@ -14,26 +14,58 @@ const axios = require("axios");
 let ordersReviewOnProcess = [];
 
 const addOrder = async (req, res) => {
-  const { product, mobile, description, quantity } = req.body;
+  const { product, mobile, description, quantity, totalPrice } = req.body;
 
-  if (!mobile || !product || !description || !quantity) {
+  if (!mobile || !product || !description || !quantity || !totalPrice) {
     res.status(400).json({ message: "Please fill all the fields" });
     return;
   }
 
   const orderId = generateFirestoreDocId();
 
-  const to = `whatsapp:+${mobile}`;
-  sendMessage(client, to, questions[0].question);
+  const confirmationMessage = `Dear Ruhaim, Thank you for your recent order. We are delighted to confirm that your order has been successfully received and is now being processed. Below are the details of your order: \n\nOrder Number: ${orderId}\n Item Ordered: ${product} - ${quantity}\n Total Amount: ${totalPrice}`;
 
-  ordersReviewOnProcess.push({ orderId, mobile, questionSent: 1 });
+  const to = `whatsapp:+${mobile}`;
+
+  await sendMessage(client, to, confirmationMessage);
 
   try {
-    db.collection("orders").doc(orderId).set(req.body);
+    await db
+      .collection("orders")
+      .doc(orderId)
+      .set({
+        orderId,
+        status: "Pending",
+        ...req.body,
+      });
 
     res.status(200).json({ message: "Order added successfully" });
   } catch (e) {
     res.status(400);
+    console.log(e);
+  }
+};
+
+const updateStatus = async (req, res) => {
+  const { orderId, mobile } = req.body;
+
+  const to = `whatsapp:+${mobile}`;
+
+  try {
+    await db.collection("orders").doc(orderId).update({
+      status: "Delivered",
+    });
+    try {
+      await sendMessage(client, to, questions[0].question);
+      ordersReviewOnProcess.push({ orderId, mobile, questionSent: 1 });
+    } catch (e) {
+      res.status(500).json({ message: "Unable to send message" });
+      return;
+    }
+
+    res.status(200).json({ message: "Order updated successfully" });
+  } catch (e) {
+    res.status(500).json({ message: "Something went wrong" });
     console.log(e);
   }
 };
@@ -75,7 +107,7 @@ const webhookHandler = async (req, res) => {
   }
 
   if (order.questionSent === 5) {
-    sendMessage(client, to, "Thanks for answering the questions");
+    await sendMessage(client, to, "Thanks for answering the questions");
 
     const answer = await getAnswers(order.orderId);
 
@@ -159,4 +191,4 @@ const predict = async (req, res) => {
   }
 };
 
-module.exports = { addOrder, webhookHandler, predict };
+module.exports = { addOrder, webhookHandler, predict, updateStatus };
