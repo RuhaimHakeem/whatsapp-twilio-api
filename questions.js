@@ -1,7 +1,7 @@
 const questions = [
   {
     question:
-      "Hi Ruhaim, thanks for your recent order! your order has beed delivered to your location. Would you mind taking a moment to share your feedback? Type 'Y' for YES and 'N' for NO",
+      "Hi Ruhaim, thanks for your recent order! your order has beed delivered to your location. Would you mind taking a moment to share your feedback?\nType 'Y' for YES and 'N' for NO",
     isRangeQuestion: false,
   },
   {

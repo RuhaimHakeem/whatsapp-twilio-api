@@ -17,17 +17,15 @@ const addOrder = async (req, res) => {
   const { product, mobile, description, quantity, totalPrice } = req.body;
 
   if (!mobile || !product || !description || !quantity || !totalPrice) {
-    res.status(400).json({ message: "Please fill all the fields" });
+    res.status(400).json({ message: "Please provide all the fields" });
     return;
   }
 
   const orderId = generateFirestoreDocId();
 
-  const confirmationMessage = `Dear Ruhaim, Thank you for your recent order. We are delighted to confirm that your order has been successfully received and is now being processed. Below are the details of your order: \n\nOrder Number: ${orderId}\n Item Ordered: ${product} - ${quantity}\n Total Amount: ${totalPrice}`;
+  const confirmationMessage = `Dear Ruhaim, Thank you for your recent order. We are delighted to confirm that your order has been successfully received and is now being processed. Below are the details of your order: \n\n Item Ordered: ${product} - ${quantity}\n Total Amount: ${totalPrice}`;
 
   const to = `whatsapp:+${mobile}`;
-
-  await sendMessage(client, to, confirmationMessage);
 
   try {
     await db
@@ -38,8 +36,19 @@ const addOrder = async (req, res) => {
         status: "Pending",
         ...req.body,
       });
+    try {
+      await sendMessage(client, to, confirmationMessage);
+    } catch (e) {
+      res.status(500).json({
+        message:
+          "Order has been added successfully but unable to send confirmation message",
+      });
+    }
 
-    res.status(200).json({ message: "Order added successfully" });
+    res.status(200).json({
+      message:
+        "Order has been added successfully and the confirmation message is sent",
+    });
   } catch (e) {
     res.status(400);
     console.log(e);
@@ -48,6 +57,11 @@ const addOrder = async (req, res) => {
 
 const updateStatus = async (req, res) => {
   const { orderId, mobile } = req.body;
+
+  if (!orderId || !mobile) {
+    res.status(400).json({ message: "Please provide all the fields" });
+    return;
+  }
 
   const to = `whatsapp:+${mobile}`;
 
@@ -59,13 +73,19 @@ const updateStatus = async (req, res) => {
       await sendMessage(client, to, questions[0].question);
       ordersReviewOnProcess.push({ orderId, mobile, questionSent: 1 });
     } catch (e) {
-      res.status(500).json({ message: "Unable to send message" });
+      res.status(500).json({
+        message:
+          "Order status has been updated successfully but unable to send feedback question",
+      });
       return;
     }
 
-    res.status(200).json({ message: "Order updated successfully" });
+    res.status(200).json({ message: "Order status updated successfully" });
   } catch (e) {
-    res.status(500).json({ message: "Something went wrong" });
+    res.status(500).json({
+      message:
+        "Unable to update order status. Please verify the details and try again.",
+    });
     console.log(e);
   }
 };
@@ -106,7 +126,7 @@ const webhookHandler = async (req, res) => {
     );
   }
 
-  if (order.questionSent === 5) {
+  if (order.questionSent === questions.length) {
     await sendMessage(client, to, "Thanks for answering the questions");
 
     const answer = await getAnswers(order.orderId);
@@ -119,9 +139,9 @@ const webhookHandler = async (req, res) => {
         text: answer,
       });
 
-      db.collection("reviews").add({
-        orderId: order.orderId,
+      await db.collection("orders").doc(order.orderId).update({
         sentiment: response.data.sentiment,
+        isReviewed: true,
       });
 
       res.status(200).send({ sentiment: response.data });

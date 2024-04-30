@@ -25,10 +25,10 @@ const getAnswers = async (orderId) => {
                 : answer.a == 3
                 ? "Okay"
                 : answer.a == 2
-                ? "Bad"
+                ? "Short"
                 : answer.a == 1
                 ? "Bad"
-                : undefined;
+                : answer.a;
 
             return text;
           });
@@ -40,6 +40,8 @@ const getAnswers = async (orderId) => {
           .answers.filter((answer) => !answer.isRangeAnswer)
           .map((answer) => answer.a)
           .join(", ");
+
+        console.log(answer);
       } catch (error) {
         console.error("Error updating document:", error);
       }
