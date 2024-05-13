@@ -40,8 +40,6 @@ const getAnswers = async (orderId) => {
           .answers.filter((answer) => !answer.isRangeAnswer)
           .map((answer) => answer.a)
           .join(", ");
-
-        console.log(answer);
       } catch (error) {
         console.error("Error updating document:", error);
       }

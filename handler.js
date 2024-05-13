@@ -14,16 +14,24 @@ const axios = require("axios");
 let ordersReviewOnProcess = [];
 
 const addOrder = async (req, res) => {
-  const { product, mobile, description, quantity, totalPrice } = req.body;
+  const { customerName, product, mobile, description, quantity, totalPrice } =
+    req.body;
 
-  if (!mobile || !product || !description || !quantity || !totalPrice) {
+  if (
+    !mobile ||
+    !product ||
+    !description ||
+    !quantity ||
+    !totalPrice ||
+    !customerName
+  ) {
     res.status(400).json({ message: "Please provide all the fields" });
     return;
   }
 
   const orderId = generateFirestoreDocId();
 
-  const confirmationMessage = `Dear Ruhaim, Thank you for your recent order. We are delighted to confirm that your order has been successfully received and is now being processed. Below are the details of your order: \n\n Item Ordered: ${product} - ${quantity}\n Total Amount: ${totalPrice}`;
+  const confirmationMessage = `Dear ${customerName}, Thank you for your recent order. We are delighted to confirm that your order has been successfully received and is now being processed. Below are the details of your order: \n\n Item Ordered: ${product} - ${quantity}\n Total Amount: ${totalPrice}`;
 
   const to = `whatsapp:+${mobile}`;
 
@@ -56,7 +64,7 @@ const addOrder = async (req, res) => {
 };
 
 const updateStatus = async (req, res) => {
-  const { orderId, mobile } = req.body;
+  const { orderId, mobile, customerName } = req.body;
 
   if (!orderId || !mobile) {
     res.status(400).json({ message: "Please provide all the fields" });
@@ -70,7 +78,11 @@ const updateStatus = async (req, res) => {
       status: "Delivered",
     });
     try {
-      await sendMessage(client, to, questions[0].question);
+      await sendMessage(
+        client,
+        to,
+        `Hi ${customerName}, ${questions[0].question}`
+      );
       ordersReviewOnProcess.push({ orderId, mobile, questionSent: 1 });
     } catch (e) {
       res.status(500).json({
@@ -127,7 +139,11 @@ const webhookHandler = async (req, res) => {
   }
 
   if (order.questionSent === questions.length) {
-    await sendMessage(client, to, "Thanks for answering the questions");
+    await sendMessage(
+      client,
+      to,
+      "Thank you for taking the time to answer our questions and share your valuable feedback.We appreciate your support and look forward to serving you again soon!"
+    );
 
     const answer = await getAnswers(order.orderId);
 
@@ -162,53 +178,4 @@ const webhookHandler = async (req, res) => {
   }
 };
 
-const predict = async (req, res) => {
-  const answersRef = db.collection("answers");
-
-  const querySnapshot = await answersRef
-    .where("orderId", "==", "1713072209460cm3nqu5u")
-    .select("answers")
-    .get();
-
-  let answer = "";
-
-  if (!querySnapshot.empty) {
-    querySnapshot.forEach(async (doc) => {
-      try {
-        const text = doc
-          .data()
-          .answers.filter((answer) => answer.isRangeAnswer)
-          .map((answer) => {
-            const text =
-              answer.a == 5
-                ? "Great"
-                : answer.a == 4
-                ? "Good"
-                : answer.a == 3
-                ? "Okay"
-                : answer.a == 2
-                ? "Bad"
-                : answer.a == 1
-                ? "Bad"
-                : undefined;
-
-            return text;
-          });
-
-        answer += `${text} `;
-
-        answer += doc
-          .data()
-          .answers.filter((answer) => !answer.isRangeAnswer)
-          .map((answer) => answer.a)
-          .join(", ");
-
-        console.log(answer);
-      } catch (error) {
-        console.error("Error updating document:", error);
-      }
-    });
-  }
-};
-
-module.exports = { addOrder, webhookHandler, predict, updateStatus };
+module.exports = { addOrder, webhookHandler, updateStatus };
